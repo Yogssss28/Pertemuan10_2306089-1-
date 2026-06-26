@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/model_product.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'product_detail_page.dart';
-
+import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
+import 'dart:typed_data';
 import '../widgets/product_card.dart';
 
 
@@ -77,6 +78,12 @@ class _ProductPageState extends State<ProductPage> {
     ).showSnackBar(const SnackBar(content: Text("Produk berhasil dihapus")));
   }
 
+  Future<String> convertImageToBase64(XFile image) async {
+    Uint8List bytes = await image.readAsBytes();
+
+    return base64Encode(bytes);
+  }
+
   void showForm(ProductModel? product, int? index) {
     final formKey = GlobalKey<FormState>();
 
@@ -92,93 +99,165 @@ class _ProductPageState extends State<ProductPage> {
       text: product?.price.toString() ?? "",
     );
 
+    TextEditingController imageController = TextEditingController(
+      text: product?.image ?? "",
+    );
+
+    XFile? selectedImage;
+    final ImagePicker picker = ImagePicker();
+
+    // method untuk memilih gambar dari galeri
+    Future<void> pickImage(StateSetter setDialogState) async {
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+      if (image != null) {
+        setDialogState(() {
+          selectedImage = image;
+          imageController.text = image.path;
+        });
+      }
+    }
+
+    Widget buildPreviewImage() {
+      if (selectedImage != null) {
+        return FutureBuilder<Uint8List>(
+          future: selectedImage!.readAsBytes(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const CircularProgressIndicator();
+            }
+
+            return Image.memory(
+              snapshot.data!,
+              width: 150,
+              height: 150,
+              fit: BoxFit.cover,
+            ); // Image.memory
+          },
+        );
+      }
+
+      if (product?.image.isNotEmpty ?? false) {
+        return Image.memory(
+          base64Decode(product!.image),
+          width: 150,
+          height: 150,
+          fit: BoxFit.cover,
+        );
+      }
+
+      return const SizedBox.shrink();
+    }
+
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(product == null ? "Tambah Produk" : "Edit Produk"),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: "Nama",
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return "Nama tidak boleh kosong";
-                  }
-                  return null;
-                },
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: Text(product == null ? "Tambah Produk" : "Edit Produk"),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: "Nama",
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return "Nama tidak boleh kosong";
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  TextFormField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: "Deskripsi",
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return "Deskripsi tidak boleh kosong";
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  TextFormField(
+                    controller: priceController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: "Harga",
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return "Harga tidak boleh kosong";
+                      }
+
+                      if (int.tryParse(value) == null) {
+                        return "Harga harus berupa angka";
+                      }
+
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: () => pickImage(setDialogState),
+                    icon: const Icon(Icons.image),
+                    label: const Text("Pilih Gambar"),
+                  ), // ElevatedButton.icon
+
+                  buildPreviewImage(),
+                ],
               ),
-
-              const SizedBox(height: 10),
-
-              TextFormField(
-                controller: descriptionController,
-                decoration: const InputDecoration(
-                  labelText: "Deskripsi",
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return "Deskripsi tidak boleh kosong";
-                  }
-                  return null;
-                },
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Batal"),
               ),
-
-              const SizedBox(height: 10),
-
-              TextFormField(
-                controller: priceController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: "Harga",
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return "Harga tidak boleh kosong";
+              ElevatedButton(
+                onPressed: () async {
+                  if (!formKey.currentState!.validate()) {
+                    return;
                   }
 
-                  if (int.tryParse(value) == null) {
-                    return "Harga harus berupa angka";
+                  String imageBase64 = product?.image ?? "";
+                  if (selectedImage != null) {
+                    imageBase64 = await convertImageToBase64(selectedImage!);
                   }
 
-                  return null;
+                  final newProduct = ProductModel(
+                    name: nameController.text.trim(),
+                    description: descriptionController.text.trim(),
+                    price: int.parse(priceController.text.trim()),
+                    image: imageBase64,
+                  );
+
+                  if (product == null) {
+                    addProduct(newProduct);
+                  } else {
+                    updateProduct(index!, newProduct);
+                  }
+
+                  Navigator.pop(context);
                 },
+                child: Text(product == null ? "Simpan" : "Perbarui"),
               ),
             ],
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              if (!formKey.currentState!.validate()) {
-                return;
-              }
-
-              final newProduct = ProductModel(
-                name: nameController.text.trim(),
-                description: descriptionController.text.trim(),
-                price: int.parse(priceController.text.trim()),
-              );
-
-              if (product == null) {
-                addProduct(newProduct);
-              } else {
-                updateProduct(index!, newProduct);
-              }
-
-              Navigator.pop(context);
-            },
-            child: Text(product == null ? "Simpan" : "Perbarui"),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -211,9 +290,7 @@ class _ProductPageState extends State<ProductPage> {
                           product: product,
                           onEdit: () => showForm(product, index),
                           onDelete: () => deleteProduct(index),
-                          
                         );
-
                       },
                     ),
             ),

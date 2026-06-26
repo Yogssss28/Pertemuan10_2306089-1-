@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
 import '../models/model_product.dart';
 import 'product_page.dart';
-import 'product_detail_page.dart';
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -148,26 +148,27 @@ class _HomePageState extends State<HomePage> {
 
               const SizedBox(height: 20),
               Row(
-                mainAxisAlignment: .spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     "Total Semua Product ${totalProducts.toString()}",
-                    style: TextStyle(fontWeight: .bold),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   TextButton(
-                    onPressed: () {
-                      Navigator.push(
+                    onPressed: () async {
+                      await Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (context) => const ProductPage(),
                         ),
                       );
+                      loadProducts(); // refresh data setelah balik dari ProductPage
                     },
                     child: const Text("Lihat selengkapnya"),
                   ),
                 ],
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               Expanded(
                 child: products.isEmpty
                     ? const Center(child: Text("Belum ada produk"))
@@ -177,10 +178,9 @@ class _HomePageState extends State<HomePage> {
                           final product = products[index];
 
                           return ProductCard(
-                          product: product,
-                         
-                        );
-                        }
+                            product: product,
+                          );
+                        },
                       ),
               ),
             ],
